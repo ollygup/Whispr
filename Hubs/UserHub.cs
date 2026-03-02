@@ -4,11 +4,10 @@ using Whispr.Models;
 
 namespace Whispr.Hubs
 {
-    public class UserHub : Hub
+    public partial class UserHub : Hub
     {
-        private ConcurrentDictionary<string, UserInfo> ConnectedUsers = new ConcurrentDictionary<string, UserInfo>(); // group, users connection id
-        private ConcurrentDictionary<string, PeerSession> UserGroups = new ConcurrentDictionary<string, PeerSession>(); // groupOwnerConnectionId, bothPeerInformation
-
+        private static ConcurrentDictionary<string, string> ConnectedUsers = new ConcurrentDictionary<string, string>(); // userConnectionId, userUniqueCode
+        private static ConcurrentDictionary<string, PeerSession> UserGroups = new ConcurrentDictionary<string, PeerSession>(); // uniqueCode, bothPeerInformation
 
         private readonly IServiceProvider _serviceProvider;
         private readonly IWebHostEnvironment _env;
@@ -20,30 +19,29 @@ namespace Whispr.Hubs
         }
 
 
-        public async Task Register(string username)
+        public async Task Register()
         {
-            var userInfo = new UserInfo
-            {
-                ConnectionId = Context.ConnectionId,
-                Username = username,
-            };
+            var uniqueCode = GenerateUniqueCode();
+            ConnectedUsers.TryAdd(Context.ConnectionId, uniqueCode);
 
-            ConnectedUsers.TryAdd(Context.ConnectionId, userInfo);
+            await CreateUserGroup();
+
+            await Clients.Caller.SendAsync("ReceiveCode", uniqueCode);
+            //await CreateUserGroup();
         }
 
-        public async Task CreateUserGroup()
+        private async Task CreateUserGroup()
         {
-            var user = ConnectedUsers[Context.ConnectionId];
-            var session = new PeerSession { UserA = user };
+            var userCode = ConnectedUsers[Context.ConnectionId];
+            var userInfo = new UserInfo { ConnectionId = Context.ConnectionId, UserCode = userCode };
+            var session = new PeerSession { UserA = userInfo };
 
-            UserGroups.TryAdd(Context.ConnectionId, session);
-
-            await Clients.Caller.SendAsync("SessionCreated", Context.ConnectionId); // send back to generate QR
+            UserGroups.TryAdd(userCode, session);
         }
 
-        public async Task JoinUserGroup(string creatorConnectionId)
+        public async Task JoinUserGroup(string uniqueCode)
         {
-            if (!UserGroups.TryGetValue(creatorConnectionId, out var session))
+            if (!UserGroups.TryGetValue(uniqueCode, out var session))
             {
                 await Clients.Caller.SendAsync("Error", "Session not found");
                 return;
@@ -55,13 +53,35 @@ namespace Whispr.Hubs
                 return;
             }
 
-            var user = ConnectedUsers[Context.ConnectionId];
-
-            if (!session.TryAdd(user))
+            var userCode = ConnectedUsers[Context.ConnectionId];
+            var userInfo = new UserInfo { ConnectionId = Context.ConnectionId, UserCode = userCode };
+            if (!session.TryAdd(userInfo))
             {
                 await Clients.Caller.SendAsync("Error", "Failed, Please Try Again");
                 return;
             }
+
+            await Clients.Clients([session.UserA?.ConnectionId, session.UserB?.ConnectionId]).SendAsync("UserJoined", session);
+        }
+        public async Task LeaveGroup()
+        {
+            var myConnectionId = Context.ConnectionId;
+
+            // Only the joiner (UserB) can explicitly leave — find the group they joined
+            var entry = UserGroups.FirstOrDefault(kvp =>
+                kvp.Value.UserB?.ConnectionId == myConnectionId);
+
+            if (entry.Value == null) return;
+
+            var session = entry.Value;
+            var ownerConnectionId = session.UserA?.ConnectionId;
+
+            // Remove joiner from session but keep the group alive for the owner
+            session.UserB = null;
+
+            // Notify owner
+            if (ownerConnectionId != null)
+                await Clients.Client(ownerConnectionId).SendAsync("PeerLeft");
         }
 
         public async Task SendUserReadyNotification(string toConnectionId)
@@ -92,17 +112,36 @@ namespace Whispr.Hubs
             await base.OnConnectedAsync();
         }
 
-        public override async Task OnDisconnectedAsync(Exception exception)
+        public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            // Remove user from registry
-            if (ConnectedUsers.TryRemove(Context.ConnectionId, out var userInfo))
+            var myConnectionId = Context.ConnectionId;
+
+            if (ConnectedUsers.TryRemove(myConnectionId, out var userCode))
             {
-                // Notify all remaining users
-                await Clients.Others.SendAsync("UserLeft", new
+                // Check if this user is a owner
+                if (UserGroups.TryGetValue(userCode, out var session))
                 {
-                    connectionId = Context.ConnectionId,
-                    username = userInfo.Username,
-                });
+                    var peerConnectionId = session.UserB?.ConnectionId;
+                    // Owner left — remove group entirely
+                    UserGroups.TryRemove(userCode, out _);
+                    // Notify joiner
+                    if (peerConnectionId != null)
+                        await Clients.Client(peerConnectionId).SendAsync("PeerLeft");
+                }
+
+                // Check if this user is a joiner (UserB) in someone else's group
+                var entry = UserGroups.FirstOrDefault(kvp =>
+                    kvp.Value.UserB?.ConnectionId == myConnectionId);
+
+                if (entry.Value != null)
+                {
+                    var ownerConnectionId = entry.Value.UserA?.ConnectionId;
+                    // Remove joiner from group, keep group alive
+                    entry.Value.UserB = null;
+                    // Notify owner
+                    if (ownerConnectionId != null)
+                        await Clients.Client(ownerConnectionId).SendAsync("PeerLeft");
+                }
             }
 
             await base.OnDisconnectedAsync(exception);

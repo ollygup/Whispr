@@ -20,7 +20,7 @@ Create or update `appsettings.Production.json` with:
 
 2. **Environment variables**  
 
-Set each allowed origin via environment variables (useful for managed hosting):
+Set each allowed origin via environment variables either through .env or managed hosting:
 
 ```bash
 ALLOWEDORIGINS__0=https://your-frontend-domain.com

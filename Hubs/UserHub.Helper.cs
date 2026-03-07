@@ -10,9 +10,13 @@
             string code;
             do
             {
-                code = new string(Enumerable.Range(0, 6)
+                var part1 = new string(Enumerable.Range(0, 4)
                     .Select(_ => Chars[Random.Next(Chars.Length)])
                     .ToArray());
+                var part2 = new string(Enumerable.Range(0, 4)
+                    .Select(_ => Chars[Random.Next(Chars.Length)])
+                    .ToArray());
+                code = $"{part1}-{part2}";
             }
             while (ConnectedUsers.Values.Contains(code));
 

@@ -20,7 +20,7 @@ namespace Whispr.Hubs
             await Clients.Client(targetConnectionId).SendAsync("ReceiveIceCandidate", Context.ConnectionId, candidate);
         }
 
-        
+        // File Sending
         public async Task SendFileOffer(string targetConnectionId, FileOfferDto offer)
         {
             await Clients.Client(targetConnectionId).SendAsync("ReceiveFileOffer", offer);
@@ -28,6 +28,10 @@ namespace Whispr.Hubs
         public async Task SendFileOfferResponse(string targetConnectionId, bool isOfferAccepted)
         {
             await Clients.Client(targetConnectionId).SendAsync("ReceiveFileOfferResponse", isOfferAccepted);
+        }
+        public async Task SendCancelFileTransfer(string targetConnectionId, string reason)
+        {
+            await Clients.Client(targetConnectionId).SendAsync("ReceiveCancelFileTransfer", reason);
         }
     }
 }

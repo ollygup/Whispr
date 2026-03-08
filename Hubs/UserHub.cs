@@ -9,15 +9,7 @@ namespace Whispr.Hubs
         private static ConcurrentDictionary<string, string> ConnectedUsers = new ConcurrentDictionary<string, string>(); // userConnectionId, userUniqueCode
         private static ConcurrentDictionary<string, PeerSession> UserGroups = new ConcurrentDictionary<string, PeerSession>(); // uniqueCode, bothPeerInformation
 
-        private readonly IServiceProvider _serviceProvider;
-        private readonly IWebHostEnvironment _env;
-
-        public UserHub(IServiceProvider serviceProvider, IWebHostEnvironment env)
-        {
-            _serviceProvider = serviceProvider;
-            _env = env;
-        }
-
+        public UserHub(){}
 
         public async Task Register()
         {
@@ -27,7 +19,6 @@ namespace Whispr.Hubs
             await CreateUserGroup();
 
             await Clients.Caller.SendAsync("ReceiveCode", uniqueCode);
-            //await CreateUserGroup();
         }
 
         private async Task CreateUserGroup()
@@ -67,21 +58,25 @@ namespace Whispr.Hubs
         {
             var myConnectionId = Context.ConnectionId;
 
-            // Only the joiner (UserB) can explicitly leave — find the group they joined
+            // Only target sessions that are active (both users present)
             var entry = UserGroups.FirstOrDefault(kvp =>
-                kvp.Value.UserB?.ConnectionId == myConnectionId);
+                kvp.Value.IsFull &&
+                (kvp.Value.UserA?.ConnectionId == myConnectionId ||
+                 kvp.Value.UserB?.ConnectionId == myConnectionId));
 
             if (entry.Value == null) return;
 
             var session = entry.Value;
-            var ownerConnectionId = session.UserA?.ConnectionId;
 
-            // Remove joiner from session but keep the group alive for the owner
+            var otherConnectionId = session.UserA?.ConnectionId == myConnectionId
+                ? session.UserB?.ConnectionId
+                : session.UserA?.ConnectionId;
+
+            // Always just clear UserB — group stays alive
             session.UserB = null;
 
-            // Notify owner
-            if (ownerConnectionId != null)
-                await Clients.Client(ownerConnectionId).SendAsync("PeerLeft");
+            if (otherConnectionId != null)
+                await Clients.Client(otherConnectionId).SendAsync("PeerLeft");
         }
 
         public async Task SendUserReadyNotification(string toConnectionId)

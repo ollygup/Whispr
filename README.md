@@ -1,4 +1,11 @@
-# Whispr Signaling Server
+# Whispr
+<div align="center">
+![Live](https://img.shields.io/badge/Live-UP-brightgreen?style=for-the-badge)
+![Stars](https://img.shields.io/github/stars/ollygup/WhisprWeb?style=for-the-badge)
+![Last commit](https://img.shields.io/github/last-commit/ollygup/WhisprWeb?style=for-the-badge)
+</div>
+
+## Whispr Signaling Server
 Backend for WebRTC signaling. Handles session coordination and CORS configuration.
 
 ## Backend Configuration

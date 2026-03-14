@@ -1,4 +1,3 @@
-# Whispr
 <p align="center">
 <img src="https://img.shields.io/badge/Live-UP-brightgreen?style=for-the-badge" />
 <img src="https://img.shields.io/github/stars/ollygup/WhisprWeb?style=for-the-badge" />

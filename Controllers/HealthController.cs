@@ -7,7 +7,7 @@ namespace Whispr.Controllers
     [Route("v1/health")]
     public class HealthController : ControllerBase
     {
-        [HttpGet("ping")]
+        [HttpHead("ping")]
         [EnableRateLimiting("health")]
         public IActionResult Get()
         {

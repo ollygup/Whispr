@@ -11,7 +11,7 @@ namespace Whispr.Controllers
         [EnableRateLimiting("health")]
         public IActionResult Get()
         {
-            return Ok(new { status = "ok" });
+            return Ok();
         }
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpLogging;
 using System.Threading.RateLimiting;
 using Whispr.Hubs;
 
@@ -31,12 +32,21 @@ builder.Services.AddRateLimiter(options =>
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-
+// configure signalr
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = true;
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+});
+
+// configure Logging
+builder.Services.AddHttpLogging(options =>
+{
+    options.LoggingFields =
+        HttpLoggingFields.RequestMethod |
+        HttpLoggingFields.RequestPath |
+        HttpLoggingFields.ResponseStatusCode;
 });
 
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
@@ -61,6 +71,15 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Middleware
+app.UseHttpLogging();
+app.Use(async (context, next) =>
+{
+    Console.WriteLine($"{DateTime.UtcNow:O} | {context.Request.Method} {context.Request.Path}");
+    await next();
+});
+
 app.UseRouting();
 app.UseCors();
 app.UseRateLimiter();

@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using Whispr.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -5,6 +6,28 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
+
+// Rate Limit
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("health", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1,
+                Window = TimeSpan.FromSeconds(30),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+});
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -38,8 +61,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseRouting();
 app.UseCors();
+app.UseRateLimiter();
 
 app.UseAuthorization();
 
